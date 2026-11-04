@@ -1,4 +1,5 @@
-## Interface: 16001
+## Interface: 16001, 11506
+## Interface-Classic: 11506
 ## Title: BoisCraft
 ## Notes: Handwerkskatalog, Auftrags- & Postsystem und Dungeon-Planer
 ## Version: @project-version@
