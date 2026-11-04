@@ -1,0 +1,17 @@
+name: CurseForge Release
+
+on:
+  push:
+    tags:
+      - "v*"
+      - "[0-9]*"
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Package and Upload to CurseForge
+        uses: BigWigsMods/packager@v2
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}

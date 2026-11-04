@@ -1,0 +1,32 @@
+## Interface: 16001
+## Title: BoisCraft
+## Notes: Handwerkskatalog, Auftrags- & Postsystem und Dungeon-Planer
+## Version: @project-version@
+## X-Curse-Project-ID: 1742765
+## OptionalDeps: AtlasLoot, AtlasLoot_Forever
+## SavedVariables: FriendProfessionDB, IncomingOrders, PendingOrders, BoisCraftSettings, ShoppingList, RecipeReagentsDB, RecipeItemMapDB, FriendMetaDB, BoisCraftWishlist, BoisCraftDropCache, BoisCraftLootHistory
+
+# Bibliotheken (müssen zuerst geladen werden)
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
+
+# Lokalisierung & Fundament (Phase 1)
+Locales.lua
+Core.lua
+Comm.lua
+Minimap.lua
+
+# Benutzeroberfläche Handwerk & Aufträge (Phase 2 & 3)
+UI_Main.lua
+UI_Catalog.lua
+UI_Orders.lua
+UI_Shopping.lua
+UI_Options.lua
+
+# Dungeon-Planer, Hotkeys & Beute-Log (Phase 4 - erst Einkommentieren wenn Dateien erstellt sind)
+DungeonData.lua
+Hotkeys.lua
+UI_Dungeons.lua
+UI_LootLog.lua

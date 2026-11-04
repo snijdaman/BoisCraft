@@ -1,0 +1,9 @@
+package-as: BoisCraft
+enable-nolib-creation: no
+
+ignore:
+  - .github
+  - .gitignore
+  - .pkgmeta
+  - README.md
+  - README_COMMUNITY_DE.txt
