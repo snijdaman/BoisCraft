@@ -164,12 +164,12 @@ de["TAB_SHOPPING"]              = "Einkaufsliste"
 de["TAB_DUNGEONS"]              = "Dungeons"
 
 -- Berufe (Anzeigenamen)
-de["PROF_ALCHEMY"]              = "Alchemie"
+de["PROF_ALCHEMY"]              = "Alchimie"
 de["PROF_BLACKSMITHING"]        = "Schmiedekunst"
 de["PROF_ENCHANTING"]           = "Verzauberkunst"
 de["PROF_ENGINEERING"]          = "Ingenieurskunst"
 de["PROF_LEATHERWORKING"]       = "Lederverarbeitung"
-de["PROF_TAILORING"]            = "Schneidern"
+de["PROF_TAILORING"]            = "Schneiderei"
 de["PROF_COOKING"]              = "Kochkunst"
 de["PROF_FIRSTAID"]             = "Erste Hilfe"
 

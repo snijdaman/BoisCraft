@@ -135,7 +135,18 @@ ns.DISPLAY_PROFESSIONS = {
     "FIRSTAID",
 }
 
--- Erkennt den kanonischen Schlüssel automatisch anhand der Übersetzungen in Locales.lua
+local PROF_ALIASES = {
+    ALCHEMY        = { "alchemy", "alchimie", "alchemie" },
+    BLACKSMITHING  = { "blacksmithing", "schmiedekunst" },
+    ENCHANTING     = { "enchanting", "verzauberkunst" },
+    ENGINEERING    = { "engineering", "ingenieurskunst", "ingenieurkunst" },
+    LEATHERWORKING = { "leatherworking", "lederverarbeitung" },
+    TAILORING      = { "tailoring", "schneiderei", "schneidern" },
+    COOKING        = { "cooking", "kochkunst", "kochen" },
+    FIRSTAID       = { "first aid", "firstaid", "erste hilfe" },
+}
+
+-- Erkennt den kanonischen Schlüssel automatisch anhand von Aliasen und Locales.lua
 function ns.NormalizeProfName(rawName)
     if not rawName or rawName == "" then return "" end
     rawName = strtrim(rawName)
@@ -149,7 +160,19 @@ function ns.NormalizeProfName(rawName)
         end
     end
 
-    -- 2. Direkt gegen alle Sprach-Tabellen in Locales.lua prüfen (inkl. Präfixe wie "Classic Cooking")
+    -- 2. Bekannte Schreibweisen (z. B. "Alchimie" in WoW Classic vs. "Alchemie", "Schneiderei" vs. "Schneidern") prüfen
+    for _, key in ipairs(ns.DISPLAY_PROFESSIONS) do
+        local aliases = PROF_ALIASES[key]
+        if aliases then
+            for _, alias in ipairs(aliases) do
+                if lower == alias or lower:find(alias, 1, true) then
+                    return key
+                end
+            end
+        end
+    end
+
+    -- 3. Direkt gegen alle Sprach-Tabellen in Locales.lua prüfen (inkl. Präfixe wie "Classic Cooking")
     if ns.Locales then
         for _, key in ipairs(ns.DISPLAY_PROFESSIONS) do
             local localeKey = "PROF_" .. key
