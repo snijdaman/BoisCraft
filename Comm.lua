@@ -20,6 +20,7 @@ commFrame:RegisterEvent("MAIL_INBOX_UPDATE")
 commFrame:RegisterEvent("MAIL_SHOW")
 commFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 commFrame:RegisterEvent("CHAT_MSG_LOOT")
+commFrame:RegisterEvent("SKILL_LINES_CHANGED")
 
 -- ==========================================================================
 -- Nur die explizit ausgewaehlte WoW-Community dient als Mitgliederverzeichnis.
@@ -365,7 +366,102 @@ end
 -- 1. Eigene Berufe, Skill-Level, Reagenzien & Item-IDs scannen + senden
 -- ============================================================================
 
+local VALID_PROF_MAP = {}
+for _, k in ipairs(ns.DISPLAY_PROFESSIONS or {}) do
+    VALID_PROF_MAP[k] = true
+end
+
+local function CleanupUnlearnedMyProfessions(myName)
+    if not myName or myName == "" then return end
+    if not FriendProfessionDB or type(FriendProfessionDB[myName]) ~= "table" then return end
+
+    local currentProfs = {}
+    local canVerifyAll = false
+
+    -- 1. Moderne GetProfessions-API (falls vorhanden)
+    if GetProfessions and GetProfessionInfo then
+        local p1, p2, _, _, cook, firstAid = GetProfessions()
+        for _, idx in ipairs({ p1, p2, cook, firstAid }) do
+            if idx then
+                local name = GetProfessionInfo(idx)
+                if name and name ~= "" then
+                    local norm = ns.NormalizeProfName(name)
+                    if VALID_PROF_MAP[norm] then
+                        currentProfs[norm] = true
+                    end
+                end
+            end
+        end
+        canVerifyAll = true
+    -- 2. Klassische GetNumSkillLines-API (nur wenn keine Header eingeklappt sind)
+    elseif GetNumSkillLines and GetSkillLineInfo then
+        local numLines = GetNumSkillLines() or 0
+        if numLines > 0 then
+            local hasCollapsedHeader = false
+            for i = 1, numLines do
+                local skillName, isHeader, isExpanded = GetSkillLineInfo(i)
+                if isHeader then
+                    if not isExpanded then
+                        hasCollapsedHeader = true
+                        break
+                    end
+                elseif skillName and skillName ~= "" then
+                    local norm = ns.NormalizeProfName(skillName)
+                    if VALID_PROF_MAP[norm] then
+                        currentProfs[norm] = true
+                    end
+                end
+            end
+            if not hasCollapsedHeader then
+                canVerifyAll = true
+            end
+        end
+    end
+
+    if not canVerifyAll then return end
+
+    local removedAny = false
+    for savedProf, _ in pairs(FriendProfessionDB[myName]) do
+        local normSaved = ns.NormalizeProfName(savedProf)
+        if VALID_PROF_MAP[normSaved] and not currentProfs[normSaved] then
+            FriendProfessionDB[myName][savedProf] = nil
+            if FriendMetaDB and FriendMetaDB.players and FriendMetaDB.players[myName] and FriendMetaDB.players[myName].skills then
+                FriendMetaDB.players[myName].skills[normSaved] = nil
+            end
+            ns.SendSyncMessage(string.format("UNLEARN:%s:%s", myName, normSaved))
+            removedAny = true
+        end
+    end
+
+    if removedAny then
+        ns.RunOutOfCombat(function()
+            if ns.RenderProfessions then ns.RenderProfessions() end
+            if ns.DisplayRecipesForProfession and ns.selectedProfession then
+                ns.DisplayRecipesForProfession(ns.selectedProfession)
+            end
+        end, "UpdateCatalogAfterUnlearn")
+    end
+end
+
+local function HaveRecipesChanged(oldList, newList)
+    if type(oldList) ~= "table" then return true end
+    if #oldList ~= #newList then return true end
+    local oldSet = {}
+    for _, rID in ipairs(oldList) do
+        oldSet[tonumber(rID)] = true
+    end
+    for _, rID in ipairs(newList) do
+        if not oldSet[tonumber(rID)] then
+            return true
+        end
+    end
+    return false
+end
+
+local scanPending = false
+
 local function ScanAndSaveCurrentTradeSkill()
+    scanPending = false
     local profName = nil
     local skillRank, skillMax = 0, 0
 
@@ -410,8 +506,15 @@ local function ScanAndSaveCurrentTradeSkill()
     if myName == "" then return end
 
     local _, myClass = UnitClass("player")
+    local prevMeta = FriendMetaDB and FriendMetaDB.players and FriendMetaDB.players[myName]
+    local prevSkill = prevMeta and prevMeta.skills and prevMeta.skills[normProf]
+    local skillChanged = (not prevSkill)
+        or (tonumber(prevSkill.rank) ~= tonumber(skillRank))
+        or (tonumber(prevSkill.maxRank) ~= tonumber(skillMax))
+
     ns.UpdatePlayerMeta(myName, myClass, normProf, skillRank, skillMax)
     BoisCraftSettings.myAlts[myName] = true
+    CleanupUnlearnedMyProfessions(myName)
 
     local learnedIDs = {}
     local seenIDs = {}
@@ -479,12 +582,13 @@ local function ScanAndSaveCurrentTradeSkill()
 
     if #learnedIDs == 0 then return end
 
-    -- Lokal unter sprachneutralem Key speichern
+    -- Prüfen, ob sich die gelernten Rezepte gegenüber dem gespeicherten Stand geändert haben
     FriendProfessionDB[myName] = FriendProfessionDB[myName] or {}
-    FriendProfessionDB[myName][normProf] = learnedIDs
+    local existingList = FriendProfessionDB[myName][normProf]
+    local recipesChanged = HaveRecipesChanged(existingList, learnedIDs)
 
-    local localProfDisplay = ns.GetLocalizedProfName(normProf)
-    print(string.format(L["MSG_RECIPES_SAVED"], #learnedIDs, localProfDisplay, myName))
+    -- Lokal unter sprachneutralem Key speichern
+    FriendProfessionDB[myName][normProf] = learnedIDs
 
     -- UI aktualisieren (kampfsicher)
     ns.RunOutOfCombat(function()
@@ -494,8 +598,16 @@ local function ScanAndSaveCurrentTradeSkill()
         end
     end, "UpdateCatalogAfterScan")
 
-    -- An verbundene Mitglieder der ausgewaehlten Community uebertragen
-    ns.BroadcastSingleProfession(myName, normProf, learnedIDs, skillRank, skillMax)
+    -- Nur wenn wirklich neue Rezepte dazugekommen sind (oder der Beruf erstmals gescannt wurde),
+    -- Chat-Meldung ausgeben und komplette Rezeptliste an die Community senden
+    if recipesChanged then
+        local localProfDisplay = ns.GetLocalizedProfName(normProf)
+        print(string.format(L["MSG_RECIPES_SAVED"], #learnedIDs, localProfDisplay, myName))
+        ns.BroadcastSingleProfession(myName, normProf, learnedIDs, skillRank, skillMax)
+    elseif skillChanged and skillRank and skillMax then
+        local metaPayload = string.format("META:%s:%s:%s:%d:%d", myName, myClass or "", normProf, skillRank, skillMax)
+        ns.SendSyncMessage(metaPayload)
+    end
 end
 
 function ns.BroadcastSingleProfession(playerName, normProf, recipeList, skillRank, skillMax, target)
@@ -833,7 +945,16 @@ commFrame:SetScript("OnEvent", function(self, event, ...)
         end
 
     elseif event == "TRADE_SKILL_SHOW" or event == "TRADE_SKILL_DATA_SOURCE_CHANGED" then
-        C_Timer.After(0.3, ScanAndSaveCurrentTradeSkill)
+        if not scanPending then
+            scanPending = true
+            C_Timer.After(0.35, ScanAndSaveCurrentTradeSkill)
+        end
+
+    elseif event == "SKILL_LINES_CHANGED" then
+        local myName = ns.GetFullPlayerName("player")
+        if myName ~= "" then
+            CleanupUnlearnedMyProfessions(myName)
+        end
 
     elseif event == "MAIL_SHOW" or event == "MAIL_INBOX_UPDATE" then
         ScanMailInboxForOrders()
@@ -942,6 +1063,23 @@ commFrame:SetScript("OnEvent", function(self, event, ...)
                     ns.DisplayRecipesForProfession(normProf)
                 end
             end, "UpdateCatalogSync")
+
+        elseif msgType == "UNLEARN" then
+            local crafterName = ns.NormalizeName(arg1)
+            local normProf = ns.NormalizeProfName(arg2 or "")
+            if crafterName ~= shortSender or normProf == "" then return end
+            if FriendProfessionDB and FriendProfessionDB[crafterName] then
+                FriendProfessionDB[crafterName][normProf] = nil
+            end
+            if FriendMetaDB and FriendMetaDB.players and FriendMetaDB.players[crafterName] and FriendMetaDB.players[crafterName].skills then
+                FriendMetaDB.players[crafterName].skills[normProf] = nil
+            end
+            ns.RunOutOfCombat(function()
+                if ns.RenderProfessions then ns.RenderProfessions() end
+                if ns.DisplayRecipesForProfession and ns.selectedProfession then
+                    ns.DisplayRecipesForProfession(ns.selectedProfession)
+                end
+            end, "UpdateCatalogUnlearn")
 
         elseif msgType == "ORDER" then
             local targetCrafter = ns.NormalizeName(arg1)
