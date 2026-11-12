@@ -21,6 +21,10 @@ commFrame:RegisterEvent("MAIL_SHOW")
 commFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 commFrame:RegisterEvent("CHAT_MSG_LOOT")
 commFrame:RegisterEvent("SKILL_LINES_CHANGED")
+commFrame:RegisterEvent("TRADE_SHOW")
+commFrame:RegisterEvent("TRADE_PLAYER_ITEM_CHANGED")
+commFrame:RegisterEvent("TRADE_ACCEPT_UPDATE")
+commFrame:RegisterEvent("UI_INFO_MESSAGE")
 
 -- ==========================================================================
 -- Nur die explizit ausgewaehlte WoW-Community dient als Mitgliederverzeichnis.
@@ -770,8 +774,24 @@ local function ScanMailInboxForOrders()
 end
 
 -- ============================================================================
--- 4. Automatischer Abzug beim Herstellen (UNIT_SPELLCAST_SUCCEEDED)
+-- 4. Automatischer Abzug beim Herstellen & Handel (UNIT_SPELLCAST_SUCCEEDED / TRADE)
 -- ============================================================================
+
+local activeTradePartner = nil
+local activeTradePlayerItems = {}
+
+local function SnapshotPlayerTradeItems()
+    activeTradePlayerItems = {}
+    if not GetTradePlayerItemLink or not GetTradePlayerItemInfo then return end
+    for slot = 1, 6 do
+        local link = GetTradePlayerItemLink(slot)
+        local itemID = link and tonumber(link:match("item:(%d+)"))
+        if itemID then
+            local _, _, quantity = GetTradePlayerItemInfo(slot)
+            activeTradePlayerItems[itemID] = (activeTradePlayerItems[itemID] or 0) + (tonumber(quantity) or 1)
+        end
+    end
+end
 
 local function OnPlayerSpellcastSucceeded(spellID)
     spellID = tonumber(spellID)
@@ -787,6 +807,20 @@ local function OnPlayerSpellcastSucceeded(spellID)
 
             if order.count == 0 then
                 print(string.format(L["MSG_CRAFT_COMPLETE"], ns.GetColoredPlayerName(order.sender)))
+
+                -- Wenn das Rezept kein physisches Item erzeugt (z. B. Verzauberung),
+                -- direkt im Handelsfenster gewirkt wurde oder für den eigenen Charakter war,
+                -- ist der Auftrag sofort komplett erledigt und wird automatisch entfernt!
+                local outItemID = ns.GetItemIDForRecipe and ns.GetItemIDForRecipe(spellID)
+                local inTradeWindow = (TradeFrame and TradeFrame:IsShown()) and true or false
+                local isSelfOrder = (ns.NormalizeName(order.sender) == myName)
+                if (not outItemID) or inTradeWindow or isSelfOrder then
+                    if ns.CompleteIncomingOrderByIndex then
+                        ns.CompleteIncomingOrderByIndex(i)
+                    else
+                        table.remove(IncomingOrders, i)
+                    end
+                end
             else
                 print(string.format(L["MSG_CRAFT_PARTIAL"], ns.GetColoredPlayerName(order.sender), order.count))
             end
@@ -965,6 +999,30 @@ commFrame:SetScript("OnEvent", function(self, event, ...)
             OnPlayerSpellcastSucceeded(spellID)
         end
 
+    elseif event == "TRADE_SHOW" then
+        activeTradePartner = ns.GetFullPlayerName("NPC")
+        SnapshotPlayerTradeItems()
+
+    elseif event == "TRADE_PLAYER_ITEM_CHANGED" or event == "TRADE_ACCEPT_UPDATE" then
+        if not activeTradePartner or activeTradePartner == "" then
+            activeTradePartner = ns.GetFullPlayerName("NPC")
+        end
+        SnapshotPlayerTradeItems()
+
+    elseif event == "UI_INFO_MESSAGE" then
+        local messageType, messageText = ...
+        local isTradeComplete = (ERR_TRADE_COMPLETE and messageText == ERR_TRADE_COMPLETE)
+            or (LE_GAME_ERR_TRADE_COMPLETE and messageType == LE_GAME_ERR_TRADE_COMPLETE)
+        if isTradeComplete and activeTradePartner and activeTradePartner ~= "" then
+            if ns.RecordOrderDelivery then
+                for itemID, qty in pairs(activeTradePlayerItems) do
+                    ns.RecordOrderDelivery(activeTradePartner, itemID, qty)
+                end
+            end
+            activeTradePartner = nil
+            activeTradePlayerItems = {}
+        end
+
     elseif event == "CHAT_MSG_LOOT" then
         OnChatMsgLoot(...)
 
@@ -1123,6 +1181,24 @@ commFrame:SetScript("OnEvent", function(self, event, ...)
                         break
                     end
                 end
+            end
+
+        elseif msgType == "DONE" then
+            local doneOrderID = arg1 or ""
+            local doneRecipeID = tonumber(arg2)
+            local crafterName = ns.NormalizeName(arg3 or shortSender)
+            if PendingOrders then
+                for idx = #PendingOrders, 1, -1 do
+                    local pOrder = PendingOrders[idx]
+                    if (doneOrderID ~= "" and pOrder.orderID == doneOrderID)
+                       or (ns.NormalizeName(pOrder.crafter) == crafterName and tonumber(pOrder.recipeID) == doneRecipeID) then
+                        table.remove(PendingOrders, idx)
+                        break
+                    end
+                end
+                ns.RunOutOfCombat(function()
+                    if ns.UpdateOrdersList then ns.UpdateOrdersList() end
+                end, "UpdateOrdersDone")
             end
 
         elseif msgType == "WL_BEGIN" then

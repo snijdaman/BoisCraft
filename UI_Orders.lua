@@ -162,7 +162,31 @@ local function AttachCraftedItemToMail(order)
     end
 end
 
--- Wird von UI_Shopping.lua bei MAIL_SEND_SUCCESS aufgerufen, wenn fertige Items verschickt wurden
+function ns.CompleteIncomingOrderByIndex(orderIndex)
+    if not IncomingOrders or not IncomingOrders[orderIndex] then return end
+    local order = IncomingOrders[orderIndex]
+    local sender = (ns.NormalizeName and ns.NormalizeName(order.sender)) or order.sender or ""
+    local myName = (ns.GetFullPlayerName and ns.GetFullPlayerName("player")) or UnitName("player") or ""
+    local oID = order.lastOrderID or order.orderID or ""
+    local rID = tonumber(order.recipeID) or 0
+
+    table.remove(IncomingOrders, orderIndex)
+
+    if PendingOrders and oID ~= "" then
+        for pIdx = #PendingOrders, 1, -1 do
+            if PendingOrders[pIdx].orderID == oID then
+                table.remove(PendingOrders, pIdx)
+                break
+            end
+        end
+    end
+
+    if sender ~= "" and sender ~= myName and ns.SendSyncMessage then
+        ns.SendSyncMessage(string.format("DONE:%s:%d:%s", oID, rID, myName), sender)
+    end
+end
+
+-- Wird von UI_Shopping.lua bei MAIL_SEND_SUCCESS oder beim Handel aufgerufen
 function ns.RecordOrderDelivery(recipient, itemID, sentQty)
     recipient = (ns.NormalizeName and ns.NormalizeName(recipient)) or recipient
     itemID = tonumber(itemID)
@@ -182,15 +206,7 @@ function ns.RecordOrderDelivery(recipient, itemID, sentQty)
             local rName = (ns.GetLocalizedRecipeName and ns.GetLocalizedRecipeName(order.recipeID)) or ("Item #" .. itemID)
 
             if sentQty >= totalOrdered then
-                table.remove(IncomingOrders, i)
-                if PendingOrders and order.orderID then
-                    for pIdx = #PendingOrders, 1, -1 do
-                        if PendingOrders[pIdx].orderID == order.orderID then
-                            table.remove(PendingOrders, pIdx)
-                            break
-                        end
-                    end
-                end
+                ns.CompleteIncomingOrderByIndex(i)
             else
                 order.countOrdered = math.max(1, totalOrdered - sentQty)
                 order.count = math.max(0, (tonumber(order.count) or 0) - sentQty)
@@ -198,6 +214,9 @@ function ns.RecordOrderDelivery(recipient, itemID, sentQty)
             end
 
             print(string.format(L["MSG_AUTO_DELIVERED"], sentQty, rName, ns.GetColoredPlayerName(recipient)))
+            ns.RunOutOfCombat(function()
+                if ns.UpdateOrdersList then ns.UpdateOrdersList() end
+            end, "UpdateOrdersAfterDelivery")
             break
         end
     end
@@ -412,15 +431,7 @@ function ns.UpdateOrdersList()
                 end)
 
                 row.doneBtn:SetScript("OnClick", function()
-                    table.remove(IncomingOrders, idx)
-                    if PendingOrders then
-                        for pIdx = #PendingOrders, 1, -1 do
-                            if PendingOrders[pIdx].orderID == order.orderID then
-                                table.remove(PendingOrders, pIdx)
-                                break
-                            end
-                        end
-                    end
+                    ns.CompleteIncomingOrderByIndex(idx)
                     ns.UpdateOrdersList()
                     print(string.format(L["MSG_ORDER_DONE"], coloredSender))
                 end)
