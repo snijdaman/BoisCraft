@@ -21,10 +21,11 @@ function ns.EnsureSavedVariables()
     RecipeItemMapDB.recipeToItem = RecipeItemMapDB.recipeToItem or {}
     RecipeItemMapDB.itemToRecipes = RecipeItemMapDB.itemToRecipes or {}
 
-    -- Metadaten für Freunde (Klassenfarbe, Skill-Level, LastSeen, verarbeitete Order-IDs)
+    -- Metadaten für Freunde (Klassenfarbe, Skill-Level, LastSeen, verarbeitete Order-IDs & Tombstones)
     FriendMetaDB = FriendMetaDB or {}
     FriendMetaDB.players = FriendMetaDB.players or {}
     FriendMetaDB.processedOrders = FriendMetaDB.processedOrders or {}
+    FriendMetaDB.orderTombstones = FriendMetaDB.orderTombstones or {}
 
     -- Einstellungen, Sprache & Account-Twinks
     BoisCraftSettings = BoisCraftSettings or {}
@@ -412,6 +413,25 @@ function ns.CleanupInactiveCrafters()
             ns.RunOutOfCombat(ns.RenderProfessions, "RenderProfessions")
         end
     end
+
+    -- Abgeschlossene/stornierte Order-Tombstones nach 7 Tagen bereinigen
+    local tombstoneTTL = 7 * 24 * 3600
+    if FriendMetaDB.orderTombstones then
+        for oID, info in pairs(FriendMetaDB.orderTombstones) do
+            local ts = type(info) == "table" and tonumber(info.updatedAt) or 0
+            if (now - ts) > tombstoneTTL then
+                FriendMetaDB.orderTombstones[oID] = nil
+            end
+        end
+    end
+    if FriendMetaDB.processedOrders then
+        local processedTTL = 14 * 24 * 3600
+        for oID, ts in pairs(FriendMetaDB.processedOrders) do
+            if (now - (tonumber(ts) or 0)) > processedTTL then
+                FriendMetaDB.processedOrders[oID] = nil
+            end
+        end
+    end
 end
 
 -- ============================================================================
@@ -657,12 +677,23 @@ function ns.GenerateOrderID()
     return string.format("%06d-%03d", time() % 1000000, math.random(100, 999))
 end
 
+function ns.RecordOrderTombstone(orderID, status, targetName, recipeID)
+    if not orderID or orderID == "" then return end
+    ns.EnsureSavedVariables()
+    FriendMetaDB.orderTombstones[orderID] = {
+        status    = status,
+        target    = ns.NormalizeName(targetName or ""),
+        recipeID  = tonumber(recipeID) or 0,
+        updatedAt = time(),
+    }
+end
+
 function ns.AddOrStackIncomingOrder(newOrder)
     if not newOrder or not newOrder.recipeID then return false end
     ns.EnsureSavedVariables()
 
     local orderID = newOrder.orderID
-    if orderID and FriendMetaDB.processedOrders[orderID] then
+    if orderID and (FriendMetaDB.processedOrders[orderID] or FriendMetaDB.orderTombstones[orderID]) then
         return false
     end
     if orderID then

@@ -168,13 +168,20 @@ function ns.CompleteIncomingOrderByIndex(orderIndex)
     local sender = (ns.NormalizeName and ns.NormalizeName(order.sender)) or order.sender or ""
     local myName = (ns.GetFullPlayerName and ns.GetFullPlayerName("player")) or UnitName("player") or ""
     local oID = order.lastOrderID or order.orderID or ""
+    local firstOID = order.orderID or ""
     local rID = tonumber(order.recipeID) or 0
 
     table.remove(IncomingOrders, orderIndex)
 
-    if PendingOrders and oID ~= "" then
+    if ns.RecordOrderTombstone then
+        if oID ~= "" then ns.RecordOrderTombstone(oID, "DONE", sender, rID) end
+        if firstOID ~= "" and firstOID ~= oID then ns.RecordOrderTombstone(firstOID, "DONE", sender, rID) end
+    end
+
+    if PendingOrders and (oID ~= "" or firstOID ~= "") then
         for pIdx = #PendingOrders, 1, -1 do
-            if PendingOrders[pIdx].orderID == oID then
+            local pID = PendingOrders[pIdx].orderID
+            if pID == oID or pID == firstOID then
                 table.remove(PendingOrders, pIdx)
                 break
             end
@@ -183,6 +190,9 @@ function ns.CompleteIncomingOrderByIndex(orderIndex)
 
     if sender ~= "" and sender ~= myName and ns.SendSyncMessage then
         ns.SendSyncMessage(string.format("DONE:%s:%d:%s", oID, rID, myName), sender)
+        if firstOID ~= "" and firstOID ~= oID then
+            ns.SendSyncMessage(string.format("DONE:%s:%d:%s", firstOID, rID, myName), sender)
+        end
     end
 end
 
@@ -523,15 +533,26 @@ function ns.UpdateOrdersList()
                         ns.RemoveRecipeFromShoppingList(order.crafter, order.recipeID, order.count or 1)
                     end
 
+                    local oID = order.orderID or ""
+                    local rID = tonumber(order.recipeID) or 0
+                    if ns.RecordOrderTombstone and oID ~= "" then
+                        ns.RecordOrderTombstone(oID, "CANCELED", targetCrafter, rID)
+                    end
+
                     table.remove(PendingOrders, idx)
                     if IncomingOrders then
                         for inIdx = #IncomingOrders, 1, -1 do
-                            if IncomingOrders[inIdx].orderID == order.orderID then
+                            if IncomingOrders[inIdx].orderID == oID or IncomingOrders[inIdx].lastOrderID == oID then
                                 table.remove(IncomingOrders, inIdx)
                                 break
                             end
                         end
                     end
+
+                    if targetCrafter ~= "" and targetCrafter ~= myName and ns.SendSyncMessage then
+                        ns.SendSyncMessage(string.format("CANCEL:%s:%d:%s", oID, rID, myName), targetCrafter)
+                    end
+
                     ns.UpdateOrdersList()
                     print(string.format(L["MSG_ORDER_CANCELED"], coloredCrafter))
                 end)

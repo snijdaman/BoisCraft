@@ -353,6 +353,9 @@ local function SendFullStateToPeer(peer)
     local now = GetTime and GetTime() or time()
     if lastFullSync[peer] and now - lastFullSync[peer] < 12 then return end
     lastFullSync[peer] = now
+    if ns.BroadcastOrderTombstonesToPeer then
+        ns.BroadcastOrderTombstonesToPeer(peer)
+    end
     ns.BroadcastPendingOrdersToCrafter(peer)
     ns.BroadcastMyMetaAndProfessions(peer)
     ns.BroadcastMyWishlist(peer)
@@ -643,13 +646,31 @@ end
 -- 2. Offene Aufträge, Wunschlisten & Metadaten bei HELLO synchronisieren
 -- ============================================================================
 
+function ns.BroadcastOrderTombstonesToPeer(peerName)
+    if not FriendMetaDB or not FriendMetaDB.orderTombstones then return end
+    local normPeer = ns.NormalizeName(peerName)
+    local myName = ns.GetFullPlayerName("player")
+    if normPeer == "" or myName == "" then return end
+
+    for oID, info in pairs(FriendMetaDB.orderTombstones) do
+        if type(info) == "table" and info.target == normPeer then
+            if info.status == "DONE" then
+                ns.SendSyncMessage(string.format("DONE:%s:%d:%s", oID, info.recipeID or 0, myName), normPeer)
+            elseif info.status == "CANCELED" then
+                ns.SendSyncMessage(string.format("CANCEL:%s:%d:%s", oID, info.recipeID or 0, myName), normPeer)
+            end
+        end
+    end
+end
+
 function ns.BroadcastPendingOrdersToCrafter(crafterName)
     if not PendingOrders or #PendingOrders == 0 then return end
     local normCrafter = ns.NormalizeName(crafterName)
     for _, order in ipairs(PendingOrders) do
-        if ns.NormalizeName(order.crafter) == normCrafter and not order.acked then
-            local oID = order.orderID or ns.GenerateOrderID()
-            order.orderID = oID
+        local oID = order.orderID or ns.GenerateOrderID()
+        order.orderID = oID
+        local isTombstoned = FriendMetaDB and FriendMetaDB.orderTombstones and FriendMetaDB.orderTombstones[oID]
+        if ns.NormalizeName(order.crafter) == normCrafter and not order.acked and not isTombstoned then
             local payload = string.format("ORDER:%s:%d:%d:%s", normCrafter, order.recipeID, order.count or 1, oID)
             ns.SendSyncMessage(payload, normCrafter)
         end
@@ -1187,18 +1208,50 @@ commFrame:SetScript("OnEvent", function(self, event, ...)
             local doneOrderID = arg1 or ""
             local doneRecipeID = tonumber(arg2)
             local crafterName = ns.NormalizeName(arg3 or shortSender)
+            if ns.RecordOrderTombstone and doneOrderID ~= "" then
+                ns.RecordOrderTombstone(doneOrderID, "DONE", crafterName, doneRecipeID)
+            end
             if PendingOrders then
+                local removed = false
                 for idx = #PendingOrders, 1, -1 do
                     local pOrder = PendingOrders[idx]
                     if (doneOrderID ~= "" and pOrder.orderID == doneOrderID)
                        or (ns.NormalizeName(pOrder.crafter) == crafterName and tonumber(pOrder.recipeID) == doneRecipeID) then
                         table.remove(PendingOrders, idx)
+                        removed = true
                         break
                     end
                 end
-                ns.RunOutOfCombat(function()
-                    if ns.UpdateOrdersList then ns.UpdateOrdersList() end
-                end, "UpdateOrdersDone")
+                if removed then
+                    ns.RunOutOfCombat(function()
+                        if ns.UpdateOrdersList then ns.UpdateOrdersList() end
+                    end, "UpdateOrdersDone")
+                end
+            end
+
+        elseif msgType == "CANCEL" then
+            local cancelOrderID = arg1 or ""
+            local cancelRecipeID = tonumber(arg2)
+            local requesterName = ns.NormalizeName(arg3 or shortSender)
+            if ns.RecordOrderTombstone and cancelOrderID ~= "" then
+                ns.RecordOrderTombstone(cancelOrderID, "CANCELED", requesterName, cancelRecipeID)
+            end
+            if IncomingOrders then
+                local removed = false
+                for idx = #IncomingOrders, 1, -1 do
+                    local inOrder = IncomingOrders[idx]
+                    if (cancelOrderID ~= "" and (inOrder.orderID == cancelOrderID or inOrder.lastOrderID == cancelOrderID))
+                       or (ns.NormalizeName(inOrder.sender) == requesterName and tonumber(inOrder.recipeID) == cancelRecipeID) then
+                        table.remove(IncomingOrders, idx)
+                        removed = true
+                        break
+                    end
+                end
+                if removed then
+                    ns.RunOutOfCombat(function()
+                        if ns.UpdateOrdersList then ns.UpdateOrdersList() end
+                    end, "UpdateOrdersCanceled")
+                end
             end
 
         elseif msgType == "WL_BEGIN" then
