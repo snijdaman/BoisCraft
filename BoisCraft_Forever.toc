@@ -23,6 +23,7 @@ UI_Main.lua
 UI_Catalog.lua
 UI_Orders.lua
 UI_Shopping.lua
+UI_Enchanter.lua
 UI_Options.lua
 
 # Dungeon-Planer, Hotkeys & Beute-Log (Phase 4 - erst Einkommentieren wenn Dateien erstellt sind)

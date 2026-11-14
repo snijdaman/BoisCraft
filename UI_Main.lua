@@ -63,6 +63,11 @@ DungeonsView:SetAllPoints(MainFrame)
 DungeonsView:Hide()
 ns.DungeonsView = DungeonsView
 
+local EnchanterView = CreateFrame("Frame", nil, MainFrame)
+EnchanterView:SetAllPoints(MainFrame)
+EnchanterView:Hide()
+ns.EnchanterView = EnchanterView
+
 -- ============================================================================
 -- 3. Untere Reiter-Buttons (Tabs 1 bis 4)
 -- ============================================================================
@@ -110,7 +115,11 @@ local Tab4 = CreateBottomTab(4, "BoisCraftTab4", MainFrame)
 Tab4:SetPoint("LEFT", Tab3, "RIGHT", 4, 0)
 ns.Tab4 = Tab4
 
-local allTabs = { Tab1, Tab2, Tab3, Tab4 }
+local Tab5 = CreateBottomTab(5, "BoisCraftTab5", MainFrame)
+Tab5:SetPoint("LEFT", Tab4, "RIGHT", 4, 0)
+ns.Tab5 = Tab5
+
+local allTabs = { Tab1, Tab2, Tab3, Tab4, Tab5 }
 
 function ns.SelectTab(tabID)
     ns.activeTabID = tabID
@@ -119,6 +128,7 @@ function ns.SelectTab(tabID)
     OrdersView:SetShown(tabID == 2)
     ShoppingView:SetShown(tabID == 3)
     DungeonsView:SetShown(tabID == 4)
+    EnchanterView:SetShown(tabID == 5)
 
     -- Beute-Log-Button oben rechts nur im Dungeon-Reiter einblenden (falls vorhanden)
     if ns.LogToggleBtn then
@@ -149,6 +159,8 @@ function ns.SelectTab(tabID)
         if ns.UpdateShoppingListView then ns.UpdateShoppingListView() end
     elseif tabID == 4 then
         if ns.UpdateDungeonsView then ns.UpdateDungeonsView() end
+    elseif tabID == 5 then
+        if ns.UpdateEnchanterView then ns.UpdateEnchanterView() end
     end
 end
 
@@ -203,6 +215,9 @@ function ns.RefreshMainFrameLocale()
     Tab3:SetTabText(L["TAB_SHOPPING"])
     if Tab4 and L["TAB_DUNGEONS"] then
         Tab4:SetTabText(L["TAB_DUNGEONS"])
+    end
+    if Tab5 and L["TAB_ENCHANTER"] then
+        Tab5:SetTabText(L["TAB_ENCHANTER"])
     end
 end
 

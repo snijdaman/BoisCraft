@@ -18,6 +18,23 @@ en["TAB_RECIPES"]               = "Recipes"
 en["TAB_ORDERS"]                = "Orders (%d)"
 en["TAB_SHOPPING"]              = "Shopping List"
 en["TAB_DUNGEONS"]              = "Dungeons"
+en["TAB_ENCHANTER"]             = "Enchanter"
+
+-- Tab 5: Verzauberer (UI_Enchanter.lua)
+en["ENCH_RECIPES_HEADER"]       = "Enchanting Recipes"
+en["ENCH_TARGETS_HEADER"]       = "Target Item (Equipped / Bags)"
+en["ENCH_NO_RECIPES"]           = "|cFF888888No Enchanting recipes found.\nOpen your Enchanting window once!|r"
+en["ENCH_NO_TARGETS"]           = "|cFF888888No enchantable items found in equipment or bags.|r"
+en["ENCH_EQUIPPED_TAG"]         = "|cFF00FF00[Equipped]|r"
+en["ENCH_BAG_TAG"]              = "|cFFAAAAAA[Bag]|r"
+en["ENCH_REPEAT_LABEL"]         = "Count:"
+en["ENCH_BTN_START"]            = "Enchant (%d left)"
+en["ENCH_BTN_START_IDLE"]       = "Enchant (%dx)"
+en["ENCH_BTN_RESET"]            = "Reset"
+en["ENCH_STATUS_HINT"]          = "|cFFAAAAAAAuto-targets the selected item & confirms replacing existing enchants.\nClick once per cast.|r"
+en["ENCH_BATCH_DONE"]           = "|cFF00FF00[BoisCraft]|r All %d enchants completed!"
+en["ENCH_SELECT_HINT"]          = "|cFFFFAA00Select an enchantment and a target item first.|r"
+en["ENCH_OPEN_PROF_HINT"]       = "|cFFFFAA00[BoisCraft]|r Please open your Enchanting profession window once if casting does not start."
 
 -- Berufe (Anzeigenamen)
 en["PROF_ALCHEMY"]              = "Alchemy"
@@ -162,6 +179,23 @@ de["TAB_RECIPES"]               = "Rezepte"
 de["TAB_ORDERS"]                = "Aufträge (%d)"
 de["TAB_SHOPPING"]              = "Einkaufsliste"
 de["TAB_DUNGEONS"]              = "Dungeons"
+de["TAB_ENCHANTER"]             = "Verzauberer"
+
+-- Tab 5: Verzauberer (UI_Enchanter.lua)
+de["ENCH_RECIPES_HEADER"]       = "Verzauberkunst-Rezepte"
+de["ENCH_TARGETS_HEADER"]       = "Ziel-Item (Ausgerüstet / Taschen)"
+de["ENCH_NO_RECIPES"]           = "|cFF888888Keine Verzauberkunst-Rezepte gefunden.\nÖffne einmal dein Verzauberkunst-Fenster!|r"
+de["ENCH_NO_TARGETS"]           = "|cFF888888Keine verzauberbaren Items ausgerüstet oder in den Taschen.|r"
+de["ENCH_EQUIPPED_TAG"]         = "|cFF00FF00[Ausgerüstet]|r"
+de["ENCH_BAG_TAG"]              = "|cFFAAAAAA[Tasche]|r"
+de["ENCH_REPEAT_LABEL"]         = "Anzahl:"
+de["ENCH_BTN_START"]            = "Verzaubern (%d offen)"
+de["ENCH_BTN_START_IDLE"]       = "Verzaubern (%dx)"
+de["ENCH_BTN_RESET"]            = "Reset"
+de["ENCH_STATUS_HINT"]          = "|cFFAAAAAAWählt automatisch das Ziel-Item & bestätigt das Überschreiben.\nKlicke einmal pro Verzauberung auf den Button.|r"
+de["ENCH_BATCH_DONE"]           = "|cFF00FF00[BoisCraft]|r Alle %d Verzauberungen abgeschlossen!"
+de["ENCH_SELECT_HINT"]          = "|cFFFFAA00Bitte zuerst eine Verzauberung und ein Ziel-Item auswählen.|r"
+de["ENCH_OPEN_PROF_HINT"]       = "|cFFFFAA00[BoisCraft]|r Bitte öffne einmal dein Verzauberkunst-Fenster, falls das Wirken nicht startet."
 
 -- Berufe (Anzeigenamen)
 de["PROF_ALCHEMY"]              = "Alchimie"
@@ -337,5 +371,6 @@ function ns.RefreshAllLocaleTexts()
     if ns.UpdateShoppingListView then ns.UpdateShoppingListView() end
     if ns.UpdateDungeonsView then ns.UpdateDungeonsView() end
     if ns.UpdateLootLogView then ns.UpdateLootLogView() end
+    if ns.UpdateEnchanterView then ns.UpdateEnchanterView() end
     if ns.RefreshOptionsLocale then ns.RefreshOptionsLocale() end
 end
